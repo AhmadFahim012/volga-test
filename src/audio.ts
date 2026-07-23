@@ -1,4 +1,4 @@
-// Audio helpers: format detection, duration probing, and long-audio chunking.
+// Audio helpers: format detection and duration probing.
 //
 // No decoding happens here — Gemini decodes audio server-side. We only need to
 // identify the format (to pick a MIME type) and know the duration. WAV duration

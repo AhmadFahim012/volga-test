@@ -63,7 +63,8 @@ const server = createServer(async (req, res) => {
   }
   if (size === 0) return json(res, 400, { error: "Empty body — send audio bytes" });
 
-  const tmpPath = join(tmpdir(), `upload_${Date.now()}.${ext}`);
+  // Unique per request (timestamp + random) so concurrent uploads never collide.
+  const tmpPath = join(tmpdir(), `upload_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`);
   try {
     writeFileSync(tmpPath, Buffer.concat(chunks));
     const result = await transcribeFile(tmpPath, {
