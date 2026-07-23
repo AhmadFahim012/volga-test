@@ -1,0 +1,7 @@
+node_modules/
+sample.wav
+*.log
+
+# secrets — never commit API keys
+.env
+.env.*

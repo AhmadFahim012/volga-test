@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Speak → Transcribe</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f1216;
+        --card: #171b21;
+        --border: #272d36;
+        --text: #e6e9ee;
+        --muted: #97a0ad;
+        --accent: #5b9dff;
+        --rec: #ff5b5b;
+        --chip: #212732;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f4f6f9; --card: #ffffff; --border: #e2e6ec;
+          --text: #1a1f26; --muted: #5c6673; --chip: #eef1f6;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+        font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        display: flex; justify-content: center; padding: 32px 16px;
+      }
+      .wrap { width: 100%; max-width: 720px; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      p.sub { color: var(--muted); margin: 0 0 24px; }
+      .card {
+        background: var(--card); border: 1px solid var(--border);
+        border-radius: 14px; padding: 20px; margin-bottom: 18px;
+      }
+      .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      button {
+        font: inherit; font-weight: 600; border: 0; border-radius: 10px;
+        padding: 12px 20px; cursor: pointer; color: #fff; background: var(--accent);
+        transition: transform .05s ease, opacity .2s ease;
+      }
+      button:active { transform: translateY(1px); }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      button.rec { background: var(--rec); }
+      .dot {
+        width: 10px; height: 10px; border-radius: 50%; background: var(--rec);
+        display: inline-block; margin-right: 8px; animation: pulse 1s infinite;
+      }
+      @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+      .status { color: var(--muted); min-height: 20px; }
+      .timer { font-variant-numeric: tabular-nums; font-weight: 600; }
+      .divider { color: var(--muted); font-size: 13px; margin: 16px 0 8px; }
+      input[type=file] { color: var(--muted); font: inherit; max-width: 100%; }
+      .seg { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+      .seg:first-child { border-top: 0; }
+      .ts {
+        flex: none; font-variant-numeric: tabular-nums; font-size: 12.5px;
+        color: var(--accent); background: var(--chip); border-radius: 6px;
+        padding: 3px 8px; height: fit-content; white-space: nowrap;
+      }
+      .full { color: var(--text); margin: 0 0 16px; }
+      .muted { color: var(--muted); }
+      audio { width: 100%; margin-top: 12px; }
+      .err { color: var(--rec); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Speak → Transcribe</h1>
+      <p class="sub">Record your voice (or upload a file). Transcribed with Gemini, timestamps per segment.</p>
+
+      <div class="card">
+        <div class="controls">
+          <button id="recBtn">● Start recording</button>
+          <span class="timer" id="timer"></span>
+        </div>
+        <p class="status" id="status">Ready.</p>
+        <audio id="player" controls hidden></audio>
+
+        <div class="divider">— or upload an audio file —</div>
+        <input type="file" id="fileInput" accept="audio/*" />
+      </div>
+
+      <div class="card" id="resultCard" hidden>
+        <p class="full" id="fullText"></p>
+        <div id="segments"></div>
+      </div>
+    </div>
+
+    <script>
+      const recBtn = document.getElementById("recBtn");
+      const statusEl = document.getElementById("status");
+      const timerEl = document.getElementById("timer");
+      const player = document.getElementById("player");
+      const fileInput = document.getElementById("fileInput");
+      const resultCard = document.getElementById("resultCard");
+      const fullText = document.getElementById("fullText");
+      const segmentsEl = document.getElementById("segments");
+
+      let mediaRecorder, chunks = [], stream, timerId, startedAt;
+
+      function setStatus(msg, isErr = false) {
+        statusEl.textContent = msg;
+        statusEl.className = isErr ? "status err" : "status";
+      }
+
+      function fmt(t) {
+        const s = Math.max(0, t), m = Math.floor(s / 60);
+        const sec = (s % 60).toFixed(1).padStart(4, "0");
+        return `${String(m).padStart(2, "0")}:${sec}`;
+      }
+
+      // --- Recording ---------------------------------------------------------
+      recBtn.addEventListener("click", async () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+          return;
+        }
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+          return setStatus("Microphone access denied.", true);
+        }
+        chunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+        mediaRecorder.onstop = onRecordingStop;
+        mediaRecorder.start();
+
+        recBtn.textContent = "■ Stop recording";
+        recBtn.classList.add("rec");
+        setStatus("Recording…");
+        startedAt = Date.now();
+        timerId = setInterval(() => {
+          timerEl.innerHTML = `<span class="dot"></span>${fmt((Date.now() - startedAt) / 1000)}`;
+        }, 100);
+      });
+
+      async function onRecordingStop() {
+        clearInterval(timerId);
+        timerEl.textContent = "";
+        recBtn.textContent = "● Start recording";
+        recBtn.classList.remove("rec");
+        stream.getTracks().forEach((t) => t.stop());
+
+        const blob = new Blob(chunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        player.src = URL.createObjectURL(blob);
+        player.hidden = false;
+
+        setStatus("Encoding audio…");
+        try {
+          const wav = await blobToWav(blob); // browser-side → 16kHz mono WAV
+          await transcribe(wav, "wav");
+        } catch (e) {
+          setStatus("Error: " + e.message, true);
+        }
+      }
+
+      // --- File upload -------------------------------------------------------
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        player.src = URL.createObjectURL(file);
+        player.hidden = false;
+        const ext = (file.name.split(".").pop() || "wav").toLowerCase();
+        setStatus("Uploading…");
+        try {
+          // Gemini accepts mp3/m4a/wav/etc. directly, so send the file as-is.
+          await transcribe(file, ext);
+        } catch (e) {
+          setStatus("Error: " + e.message, true);
+        }
+      });
+
+      // --- Send to the server ------------------------------------------------
+      async function transcribe(body, ext) {
+        setStatus("Transcribing with Gemini…");
+        recBtn.disabled = true;
+        try {
+          const res = await fetch(`/transcribe?backend=gemini&ext=${ext}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body,
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          render(data);
+          setStatus(`Done — ${data.segments.length} segment(s), ${data.durationSec.toFixed(1)}s.`);
+        } finally {
+          recBtn.disabled = false;
+        }
+      }
+
+      function render(result) {
+        resultCard.hidden = false;
+        fullText.textContent = result.text || "";
+        fullText.className = result.text ? "full" : "full muted";
+        if (!result.text) fullText.textContent = "(no speech detected)";
+        segmentsEl.innerHTML = "";
+        for (const s of result.segments) {
+          const row = document.createElement("div");
+          row.className = "seg";
+          row.innerHTML =
+            `<span class="ts">${fmt(s.start)} → ${fmt(s.end)}</span><span>${escapeHtml(s.text)}</span>`;
+          segmentsEl.appendChild(row);
+        }
+      }
+
+      function escapeHtml(str) {
+        return str.replace(/[&<>"]/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+      }
+
+      // Decode recorded audio and re-encode as 16kHz mono 16-bit PCM WAV.
+      // Doing this in the browser means the server/Gemini always get WAV, with
+      // no ffmpeg and no dependency on the browser's recording codec.
+      async function blobToWav(blob) {
+        const arrayBuf = await blob.arrayBuffer();
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const decoded = await ctx.decodeAudioData(arrayBuf);
+        ctx.close();
+
+        // Resample to 16kHz mono via an offline context (1 channel downmixes).
+        const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
+        const src = offline.createBufferSource();
+        src.buffer = decoded;
+        src.connect(offline.destination);
+        src.start();
+        const rendered = await offline.startRendering();
+        return encodeWav(rendered);
+      }
+
+      function encodeWav(audioBuffer) {
+        const data = audioBuffer.getChannelData(0);
+        const rate = audioBuffer.sampleRate;
+        const buf = new ArrayBuffer(44 + data.length * 2);
+        const view = new DataView(buf);
+        const wr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+        wr(0, "RIFF"); view.setUint32(4, 36 + data.length * 2, true); wr(8, "WAVE");
+        wr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true); view.setUint32(24, rate, true);
+        view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true); wr(36, "data"); view.setUint32(40, data.length * 2, true);
+        let off = 44;
+        for (let i = 0; i < data.length; i++) {
+          const s = Math.max(-1, Math.min(1, data[i]));
+          view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+          off += 2;
+        }
+        return new Blob([view], { type: "audio/wav" });
+      }
+    </script>
+  </body>
+</html>
