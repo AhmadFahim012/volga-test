@@ -5,17 +5,15 @@
 //   node src/server.ts            # listens on :3000, open http://localhost:3000
 //   curl -s --data-binary @recording.mp3 \
 //        -H "Content-Type: audio/mpeg" \
-//        "http://localhost:3000/transcribe?ext=mp3" | jq
+//        http://localhost:3000/transcribe | jq
 //
 // Raw-body upload keeps this dependency-free; a production service would swap
 // in multipart/form-data (busboy/multer) and stream to disk rather than buffer.
 
 import { createServer } from "node:http";
-import { writeFileSync, unlinkSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { getBackend } from "./backends.ts";
-import { transcribeFile } from "./pipeline.ts";
+import { transcribeAudio } from "./pipeline.ts";
 
 // Load .env (GOOGLE_GEMINI_KEY etc.) into process.env if the file exists.
 try {
@@ -48,38 +46,28 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const backendName = url.searchParams.get("backend") ?? "gemini";
   const language = url.searchParams.get("language");
-  const ext = (url.searchParams.get("ext") ?? "wav").replace(/[^a-z0-9]/gi, "");
 
-  // Buffer the body with a size cap.
-  const chunks: Buffer[] = [];
+  // Read the upload as it streams in (the body arrives in network-sized pieces),
+  // enforcing the size cap along the way, then join it into the full audio buffer.
+  const parts: Buffer[] = [];
   let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
+  for await (const part of req) {
+    size += part.length;
     if (size > MAX_BYTES) {
       req.destroy();
       return json(res, 413, { error: "Payload too large" });
     }
-    chunks.push(chunk);
+    parts.push(part);
   }
   if (size === 0) return json(res, 400, { error: "Empty body — send audio bytes" });
 
-  // Unique per request (timestamp + random) so concurrent uploads never collide.
-  const tmpPath = join(tmpdir(), `upload_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`);
+  // Everything stays in memory — no temp file to write or clean up.
   try {
-    writeFileSync(tmpPath, Buffer.concat(chunks));
-    const result = await transcribeFile(tmpPath, {
-      backend: getBackend(backendName),
-      language,
-    });
+    const audio = Buffer.concat(parts);
+    const result = await transcribeAudio(audio, { backend: getBackend(backendName), language });
     return json(res, 200, result);
   } catch (err) {
     return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
-  } finally {
-    try {
-      unlinkSync(tmpPath);
-    } catch {
-      /* best-effort */
-    }
   }
 });
 
@@ -92,6 +80,6 @@ function json(res: import("node:http").ServerResponse, code: number, body: unkno
 server.listen(PORT, () => {
   console.log(`Transcription service on http://localhost:${PORT}`);
   console.log(`  GET  /                                     ← open this to record & transcribe`);
-  console.log(`  POST /transcribe?backend=gemini&ext=mp3    (audio bytes as body)`);
+  console.log(`  POST /transcribe    (audio bytes as body)`);
   console.log(`  GET  /health`);
 });

@@ -21,5 +21,5 @@ export interface TranscriptionResult {
 // backend could be added later without changing the orchestration code.
 export interface Backend {
   readonly name: string;
-  transcribe(audioPath: string, language?: string | null): Promise<Segment[]>;
+  transcribe(audio: Buffer, language?: string | null): Promise<Segment[]>;
 }

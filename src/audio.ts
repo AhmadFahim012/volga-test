@@ -1,19 +1,11 @@
-// Audio helpers: format detection and duration probing.
-//
-// No decoding happens here — Gemini decodes audio server-side. We only need to
-// identify the format (to pick a MIME type) and know the duration. WAV duration
-// is parsed straight from the header (no deps); other formats use ffprobe if it
-// happens to be installed, otherwise the pipeline falls back gracefully.
-
-import { readFileSync, existsSync } from "node:fs";
-import { execFileSync } from "node:child_process";
-import { extname } from "node:path";
+// Audio helpers: format detection and duration probing. Both operate on the
+// in-memory audio bytes — no files, no decoding (Gemini decodes server-side).
 
 export type AudioFormat = "wav" | "mp3" | "m4a" | "flac" | "ogg" | "unknown";
 
-// Magic-byte sniffing so we identify by content, not just by extension.
-export function detectFormat(filePath: string): AudioFormat {
-  const buf = readFileSync(filePath);
+// Identify the format from the file's magic bytes (its signature), not a
+// filename — more reliable, and we only ever have the raw bytes here.
+export function detectFormat(buf: Buffer): AudioFormat {
   const head = buf.subarray(0, 4).toString("ascii");
 
   if (head === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WAVE") return "wav";
@@ -23,14 +15,12 @@ export function detectFormat(filePath: string): AudioFormat {
   if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return "mp3"; // MPEG frame sync
   if (buf.subarray(4, 8).toString("ascii") === "ftyp") return "m4a"; // MP4/M4A box
 
-  const ext = extname(filePath).slice(1).toLowerCase();
-  if (["wav", "mp3", "m4a", "flac", "ogg"].includes(ext)) return ext as AudioFormat;
   return "unknown";
 }
 
-// Parse a canonical PCM WAV header to get duration in seconds. No deps.
-export function probeWavDuration(filePath: string): number {
-  const buf = readFileSync(filePath);
+// Duration in seconds from a canonical PCM WAV header: dataSize / byteRate.
+// Pure header arithmetic, no dependencies.
+export function probeWavDuration(buf: Buffer): number {
   if (buf.subarray(0, 4).toString("ascii") !== "RIFF") throw new Error("Not a RIFF/WAV file");
 
   let offset = 12; // skip "RIFF"<size>"WAVE"
@@ -49,22 +39,9 @@ export function probeWavDuration(filePath: string): number {
   return dataSize / byteRate;
 }
 
-// Duration for any format: WAV natively, else ffprobe if available.
-export function probeDuration(filePath: string): number {
-  if (detectFormat(filePath) === "wav") return probeWavDuration(filePath);
-  try {
-    const out = execFileSync(
-      "ffprobe",
-      ["-v", "error", "-show_entries", "format=duration",
-       "-of", "default=noprint_wrappers=1:nokey=1", filePath],
-      { encoding: "utf8" }
-    );
-    return parseFloat(out.trim());
-  } catch {
-    throw new Error("Cannot probe non-WAV duration without ffprobe. Install ffmpeg or use WAV.");
-  }
-}
-
-export function assertExists(filePath: string): void {
-  if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+// Best-effort duration: available cheaply for WAV. For other formats it throws,
+// and the pipeline falls back to the last segment's end time.
+export function probeDuration(buf: Buffer): number {
+  if (detectFormat(buf) === "wav") return probeWavDuration(buf);
+  throw new Error("Duration is only derivable from a WAV header here");
 }

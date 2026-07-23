@@ -152,7 +152,7 @@
         setStatus("Encoding audio…");
         try {
           const wav = await blobToWav(blob); // browser-side → 16kHz mono WAV
-          await transcribe(wav, "wav");
+          await transcribe(wav);
         } catch (e) {
           setStatus("Error: " + e.message, true);
         }
@@ -164,22 +164,21 @@
         if (!file) return;
         player.src = URL.createObjectURL(file);
         player.hidden = false;
-        const ext = (file.name.split(".").pop() || "wav").toLowerCase();
         setStatus("Uploading…");
         try {
           // Gemini accepts mp3/m4a/wav/etc. directly, so send the file as-is.
-          await transcribe(file, ext);
+          await transcribe(file);
         } catch (e) {
           setStatus("Error: " + e.message, true);
         }
       });
 
       // --- Send to the server ------------------------------------------------
-      async function transcribe(body, ext) {
+      async function transcribe(body) {
         setStatus("Transcribing with Gemini…");
         recBtn.disabled = true;
         try {
-          const res = await fetch(`/transcribe?backend=gemini&ext=${ext}`, {
+          const res = await fetch(`/transcribe`, {
             method: "POST",
             headers: { "Content-Type": "application/octet-stream" },
             body,

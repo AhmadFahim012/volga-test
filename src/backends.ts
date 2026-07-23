@@ -33,19 +33,17 @@ export function createGeminiBackend(
 ): Backend {
   return {
     name: "gemini",
-    async transcribe(audioPath: string, language?: string | null): Promise<Segment[]> {
+    async transcribe(audio: Buffer, language?: string | null): Promise<Segment[]> {
       if (!apiKey) throw new Error("No Gemini API key set (GOOGLE_GEMINI_KEY)");
-      const { readFileSync } = await import("node:fs");
       const { detectFormat } = await import("./audio.ts");
 
-      const fmt = detectFormat(audioPath);
+      const fmt = detectFormat(audio);
       const mimeType = GEMINI_MIME[fmt];
       if (!mimeType) throw new Error(`Unsupported audio format '${fmt}' for Gemini`);
 
-      const bytes = readFileSync(audioPath);
-      if (bytes.length > GEMINI_INLINE_LIMIT) {
+      if (audio.length > GEMINI_INLINE_LIMIT) {
         throw new Error(
-          `File is ${(bytes.length / 1e6).toFixed(1)}MB; too large to inline. ` +
+          `File is ${(audio.length / 1e6).toFixed(1)}MB; too large to inline. ` +
           `Use the Gemini File API for large/long audio (see README).`
         );
       }
@@ -65,7 +63,7 @@ export function createGeminiBackend(
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents: [
-            { parts: [{ text: prompt }, { inlineData: { mimeType, data: bytes.toString("base64") } }] },
+            { parts: [{ text: prompt }, { inlineData: { mimeType, data: audio.toString("base64") } }] },
           ],
           // Structured output: force clean {start, end, text} segments so we don't
           // have to parse free-form model text.
