@@ -70,8 +70,8 @@ Output: `{ text, segments: [{ start, end, text }], language, durationSec }`.
 
 - **Formats**: Gemini accepts wav/mp3/m4a/flac/ogg directly; the browser re-encodes
   its webm/opus recording to WAV client-side.
-- **Long audio**: files are inlined up to ~15 MB, then Gemini's File API takes over;
-  `planChunks()` is the fallback strategy (overlapping ~30 s windows, stitched by
-  offset) for an engine that can't ingest a long file at once.
+- **Long audio**: files are inlined up to ~15 MB, then Gemini's File API takes over.
+  For an engine that can't ingest a long file at once, the fallback is to split into
+  overlapping ~30 s windows and stitch the results back together by offset.
 - **Production**: store audio in object storage + transcript rows in a DB, expose an
   async `POST` (job id) + `GET /{id}` API, and retry transient failures with backoff.

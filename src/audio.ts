@@ -65,26 +65,6 @@ export function probeDuration(filePath: string): number {
   }
 }
 
-export interface Chunk {
-  start: number;
-  end: number;
-}
-
-// Split a long recording into overlapping time windows so we can transcribe
-// chunk-by-chunk. Overlap prevents words being cut at boundaries.
-export function planChunks(durationSec: number, windowSec = 30, overlapSec = 1): Chunk[] {
-  if (durationSec <= windowSec) return [{ start: 0, end: durationSec }];
-  const chunks: Chunk[] = [];
-  let start = 0;
-  while (start < durationSec) {
-    const end = Math.min(start + windowSec, durationSec);
-    chunks.push({ start, end });
-    if (end >= durationSec) break;
-    start = end - overlapSec; // step back by the overlap
-  }
-  return chunks;
-}
-
 export function assertExists(filePath: string): void {
   if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 }
