@@ -3,11 +3,7 @@
   "version": "1.0.0",
   "description": "Simple audio-to-text transcription pipeline with timestamped segments (TypeScript)",
   "type": "module",
-  "bin": {
-    "transcribe": "src/cli.ts"
-  },
   "scripts": {
-    "transcribe": "node src/cli.ts",
     "serve": "node src/server.ts",
     "typecheck": "tsc --noEmit"
   },

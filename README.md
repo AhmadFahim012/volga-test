@@ -7,19 +7,19 @@ run directly with no build step. Transcription uses the **Google Gemini** API
 ## Architecture
 
 ```
-audio ──▶ audio.ts ──▶ pipeline.ts ──▶ Backend ──▶ segments ──▶ CLI / HTTP / Web
-        (detect &     (orchestrate,   (Gemini)    (timestamps)   (json/vtt/text)
+audio ──▶ audio.ts ──▶ pipeline.ts ──▶ Backend ──▶ segments ──▶ HTTP + Web page
+        (detect &     (orchestrate,   (Gemini)    (timestamps)      (JSON)
          probe)        clean, shape)
 ```
 
 | File | Responsibility |
 | --- | --- |
 | `src/types.ts` | `Segment`, `TranscriptionResult`, and the `Backend` interface |
-| `src/audio.ts` | format detection (magic bytes), duration probe, chunk planning |
+| `src/audio.ts` | format detection (magic bytes) and duration probe |
 | `src/backends.ts` | the Gemini backend (structured-JSON transcription) |
 | `src/pipeline.ts` | orchestration: transcribe → clean → shape |
-| `src/cli.ts` / `src/server.ts` | command-line and HTTP entry points |
-| `public/index.html` | browser mic recorder → timestamped transcript |
+| `src/server.ts` | HTTP service; also serves the browser page |
+| `public/index.html` | browser mic recorder / file upload → timestamped transcript |
 
 **Two design choices drive it:** (1) a **linear pipeline** where each stage does
 one job, so pieces are independently testable; and (2) a **pluggable `Backend`**
@@ -40,14 +40,13 @@ Override the model with `GEMINI_MODEL` (default `gemini-flash-latest`).
 ## Usage
 
 ```bash
-# Browser: record from your mic or upload a file
-node src/server.ts                # open http://localhost:3000
+node src/server.ts                # then open http://localhost:3000
+```
 
-# CLI
-node src/cli.ts recording.mp3 --pretty      # timestamped lines
-node src/cli.ts recording.mp3 --format json # or: vtt
+In the browser: **record from your mic or upload a file** → see the transcript
+with per-segment timestamps. Or call the endpoint directly:
 
-# HTTP
+```bash
 curl --data-binary @recording.mp3 -H "Content-Type: audio/mpeg" \
      "http://localhost:3000/transcribe?ext=mp3"
 ```

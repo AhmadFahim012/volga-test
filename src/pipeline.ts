@@ -59,24 +59,3 @@ export function cleanSegments(segments: Segment[]): Segment[] {
   cleaned.sort((a, b) => a.start - b.start);
   return cleaned;
 }
-
-// Format seconds as HH:MM:SS.mmm for human-readable transcripts and subtitles.
-export function formatTimestamp(seconds: number): string {
-  const ms = Math.floor((seconds % 1) * 1000);
-  const total = Math.floor(seconds);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
-  return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(ms, 3)}`;
-}
-
-// Render segments as WebVTT — a concrete "downstream use" (captions/subtitles).
-export function toVtt(result: TranscriptionResult): string {
-  const lines = ["WEBVTT", ""];
-  for (const seg of result.segments) {
-    lines.push(`${formatTimestamp(seg.start)} --> ${formatTimestamp(seg.end)}`);
-    lines.push(seg.text, "");
-  }
-  return lines.join("\n");
-}
