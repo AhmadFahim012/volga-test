@@ -1,11 +1,3 @@
 node_modules/
-sample.wav
-*.log
-
-# secrets — never commit API keys
 .env
 .env.*
-!.env.example
-
-# personal study notes — not part of the deliverable
-WALKTHROUGH.md
