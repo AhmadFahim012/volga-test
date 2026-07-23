@@ -7,8 +7,8 @@
 // Gemini accepts encoded audio directly and DECODES IT SERVER-SIDE, so we never
 // need a local decoder or ffmpeg — we just send the bytes and ask for timestamped
 // segments back via structured JSON output. Needs an API key (free from Google AI
-// Studio). Small files are inlined as base64; see README/Q5 for the File API path
-// used for large/long recordings.
+// Studio). Small files are inlined as base64; the File API handles large/long
+// recordings (see README).
 
 import type { Backend, Segment } from "./types.ts";
 
@@ -46,7 +46,7 @@ export function createGeminiBackend(
       if (bytes.length > GEMINI_INLINE_LIMIT) {
         throw new Error(
           `File is ${(bytes.length / 1e6).toFixed(1)}MB; too large to inline. ` +
-          `Use the Gemini File API for large/long audio (see README Q5).`
+          `Use the Gemini File API for large/long audio (see README).`
         );
       }
 

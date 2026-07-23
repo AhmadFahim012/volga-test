@@ -1,9 +1,8 @@
 // Pipeline orchestration: file in -> backend -> cleaned, timestamped result.
 //
-// This ties together format handling (Q4) and the long-audio strategy (Q5)
-// around the selected Backend. The backend does the actual speech-to-text (and,
-// for Gemini, the audio decoding); this module owns the surrounding concerns:
-// segment cleaning, duration, and output shaping.
+// The backend does the actual speech-to-text (and, for Gemini, the audio
+// decoding); this module owns the surrounding concerns: segment cleaning,
+// duration, and output shaping.
 
 import type { Backend, Segment, TranscriptionResult } from "./types.ts";
 import { assertExists, probeDuration } from "./audio.ts";
@@ -19,10 +18,8 @@ export async function transcribeFile(
 ): Promise<TranscriptionResult> {
   assertExists(inputPath);
 
-  // Q4: no local conversion — Gemini accepts the encoded audio and decodes it
-  // server-side. The backend maps the detected format to the right MIME type.
-  // Q5: hand the whole file to the backend; Gemini windows long audio internally
-  // (and the File API path handles very large files — see README).
+  // No local conversion — Gemini accepts the encoded audio and decodes it
+  // server-side, so we hand the file straight to the backend.
   const rawSegments = await opts.backend.transcribe(inputPath, opts.language ?? null);
   const segments = cleanSegments(rawSegments);
 

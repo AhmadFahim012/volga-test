@@ -1,6 +1,6 @@
-// Optional HTTP service (Q1: "a service or script"). Zero-dependency, built on
-// Node's http module. Accepts a raw audio upload and returns the timestamped
-// transcription as JSON.
+// HTTP service built on Node's http module (no framework). Serves the recorder
+// page and accepts a raw audio upload, returning the timestamped transcription
+// as JSON.
 //
 //   node src/server.ts            # listens on :3000, open http://localhost:3000
 //   curl -s --data-binary @recording.mp3 \
